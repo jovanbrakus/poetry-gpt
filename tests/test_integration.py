@@ -5,7 +5,7 @@ import os
 from unittest.mock import patch
 
 from poetry import train_model, generate_text
-from model.transformer import MiniGPT
+from model.transformer import PoetryGPT
 from data.tokenizer import CharTokenizer
 from training.config import TrainingConfig
 from model.model_manager import save_model_and_tokenizer, load_model_and_tokenizer
@@ -25,7 +25,7 @@ class TestIntegration:
         text = "hello world this is a test"
         tokenizer = CharTokenizer(text)
         
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=32,
             n_heads=4,
@@ -45,7 +45,7 @@ class TestIntegration:
         text = "abcdefghijklmnopqrstuvwxyz"
         tokenizer = CharTokenizer(text)
         
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=32,
             n_heads=4,
@@ -69,7 +69,7 @@ class TestIntegration:
         tokenizer = CharTokenizer(text)
         config = TrainingConfig(d_model=32, n_heads=4, n_layers=2, max_len=16, d_ff=128)
         
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=config.d_model,
             n_heads=config.n_heads,
@@ -100,7 +100,7 @@ class TestIntegration:
         mock_text = "slovenian poetry text sample"
         mock_load_data.return_value = mock_text
         
-        mock_model = MiniGPT(vocab_size=20, d_model=32, n_heads=4, n_layers=2)
+        mock_model = PoetryGPT(vocab_size=20, d_model=32, n_heads=4, n_layers=2)
         mock_train.return_value = mock_model
         
         with patch('torch.backends.mps.is_available', return_value=False):
@@ -115,7 +115,7 @@ class TestIntegration:
         text = "test text for generation"
         tokenizer = CharTokenizer(text)
         config = TrainingConfig(d_model=32, n_heads=4, n_layers=2, d_ff=128)
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=config.d_model,
             n_heads=config.n_heads,
@@ -137,7 +137,7 @@ class TestIntegration:
         text = "abc"
         tokenizer = CharTokenizer(text)
         config = TrainingConfig(d_model=32, n_heads=4, n_layers=2, d_ff=128)
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=config.d_model,
             n_heads=config.n_heads,
@@ -161,7 +161,7 @@ class TestIntegration:
         text = "sample training text with various characters"
         tokenizer = CharTokenizer(text)
         
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=64,
             n_heads=8,
@@ -203,7 +203,7 @@ class TestIntegration:
             checkpoint_path=None  # Don't try to load existing checkpoint
         )
         
-        model = MiniGPT(
+        model = PoetryGPT(
             vocab_size=tokenizer.vocab_size,
             d_model=config.d_model,
             n_heads=config.n_heads,

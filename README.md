@@ -4,7 +4,7 @@ A character-level GPT model trained on Slovenian poetry for generating poetic te
 
 ## Model Architecture
 
-**MiniGPT** - A simplified GPT (Generative Pre-trained Transformer) implementation with:
+**PoetryGPT** - A simplified GPT (Generative Pre-trained Transformer) implementation with:
 - **Character-level tokenization** for handling Slovenian text and special characters
 - **Multi-head attention** mechanism for capturing long-range dependencies
 - **Transformer blocks** with residual connections and layer normalization
@@ -108,7 +108,7 @@ config = TrainingConfig(
 ```
 poezija/
 ├── model/              # Model architecture
-│   ├── transformer.py  # Main MiniGPT implementation
+│   ├── transformer.py  # Main PoetryGPT implementation
 │   ├── attention.py    # Attention mechanisms
 │   └── ...
 ├── data/              # Data handling

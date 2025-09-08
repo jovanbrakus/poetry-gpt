@@ -1,7 +1,7 @@
 import pytest
 import torch
 import torch.nn as nn
-from model.transformer import MiniGPT, TransformerBlock, MultiHeadAttention
+from model.transformer import PoetryGPT, TransformerBlock, MultiHeadAttention
 from model.attention import scaled_dot_product_attention
 from model.embeddings import PositionalEncoding
 from model.utils import create_causal_mask
@@ -145,10 +145,10 @@ class TestTransformerBlock:
         assert not torch.allclose(x, output)
 
 
-class TestMiniGPT:
+class TestPoetryGPT:
     @pytest.fixture
-    def mini_gpt(self):
-        return MiniGPT(
+    def poetry_gpt(self):
+        return PoetryGPT(
             vocab_size=100,
             d_model=128,
             n_heads=8,
@@ -158,74 +158,74 @@ class TestMiniGPT:
             dropout=0.1
         )
     
-    def test_init_parameters(self, mini_gpt):
-        assert mini_gpt.max_len == 256
-        assert len(mini_gpt.blocks) == 4
-        assert mini_gpt.token_embedding.num_embeddings == 100
-        assert mini_gpt.token_embedding.embedding_dim == 128
-        assert mini_gpt.lm_head.out_features == 100
+    def test_init_parameters(self, poetry_gpt):
+        assert poetry_gpt.max_len == 256
+        assert len(poetry_gpt.blocks) == 4
+        assert poetry_gpt.token_embedding.num_embeddings == 100
+        assert poetry_gpt.token_embedding.embedding_dim == 128
+        assert poetry_gpt.lm_head.out_features == 100
     
-    def test_forward_shape(self, mini_gpt):
+    def test_forward_shape(self, poetry_gpt):
         batch_size, seq_len = 2, 10
         vocab_size = 100
         idx = torch.randint(0, vocab_size, (batch_size, seq_len))
         
-        output = mini_gpt(idx)
+        output = poetry_gpt(idx)
         assert output.shape == (batch_size, seq_len, vocab_size)
     
-    def test_forward_with_mask(self, mini_gpt):
+    def test_forward_with_mask(self, poetry_gpt):
         batch_size, seq_len = 1, 5
         vocab_size = 100
         idx = torch.randint(0, vocab_size, (batch_size, seq_len))
         mask = create_causal_mask(seq_len, torch.device('cpu'))
         
-        output = mini_gpt(idx, mask)
+        output = poetry_gpt(idx, mask)
         assert output.shape == (batch_size, seq_len, vocab_size)
     
-    def test_generate_basic(self, mini_gpt):
-        mini_gpt.eval()
+    def test_generate_basic(self, poetry_gpt):
+        poetry_gpt.eval()
         batch_size, initial_len = 1, 5
         vocab_size = 100
         idx = torch.randint(0, vocab_size, (batch_size, initial_len))
         
         with torch.no_grad():
-            generated = mini_gpt.generate(idx, max_new_tokens=10)
+            generated = poetry_gpt.generate(idx, max_new_tokens=10)
         
         assert generated.shape == (batch_size, initial_len + 10)
         assert torch.all(generated[:, :initial_len] == idx)
     
-    def test_generate_with_temperature(self, mini_gpt):
-        mini_gpt.eval()
+    def test_generate_with_temperature(self, poetry_gpt):
+        poetry_gpt.eval()
         idx = torch.randint(0, 100, (1, 5))
         
         with torch.no_grad():
-            gen_low_temp = mini_gpt.generate(idx, max_new_tokens=5, temperature=0.1)
-            gen_high_temp = mini_gpt.generate(idx, max_new_tokens=5, temperature=2.0)
+            gen_low_temp = poetry_gpt.generate(idx, max_new_tokens=5, temperature=0.1)
+            gen_high_temp = poetry_gpt.generate(idx, max_new_tokens=5, temperature=2.0)
         
         assert gen_low_temp.shape == gen_high_temp.shape
     
-    def test_generate_with_top_k(self, mini_gpt):
-        mini_gpt.eval()
+    def test_generate_with_top_k(self, poetry_gpt):
+        poetry_gpt.eval()
         idx = torch.randint(0, 100, (1, 5))
         
         with torch.no_grad():
-            generated = mini_gpt.generate(idx, max_new_tokens=5, top_k=10)
+            generated = poetry_gpt.generate(idx, max_new_tokens=5, top_k=10)
         
         assert generated.shape == (1, 10)
     
-    def test_generate_respects_max_len(self, mini_gpt):
-        mini_gpt.eval()
-        long_sequence_len = mini_gpt.max_len + 50
+    def test_generate_respects_max_len(self, poetry_gpt):
+        poetry_gpt.eval()
+        long_sequence_len = poetry_gpt.max_len + 50
         idx = torch.randint(0, 100, (1, long_sequence_len))
         
         with torch.no_grad():
-            generated = mini_gpt.generate(idx, max_new_tokens=5)
+            generated = poetry_gpt.generate(idx, max_new_tokens=5)
         
         assert generated.shape == (1, long_sequence_len + 5)
     
-    def test_parameter_count(self, mini_gpt):
-        total_params = sum(p.numel() for p in mini_gpt.parameters())
+    def test_parameter_count(self, poetry_gpt):
+        total_params = sum(p.numel() for p in poetry_gpt.parameters())
         assert total_params > 0
         
-        trainable_params = sum(p.numel() for p in mini_gpt.parameters() if p.requires_grad)
+        trainable_params = sum(p.numel() for p in poetry_gpt.parameters() if p.requires_grad)
         assert trainable_params == total_params

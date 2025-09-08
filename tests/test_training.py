@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 from training.config import TrainingConfig
 from training.trainer import format_time, save_checkpoint, load_checkpoint, train_gpt
 from training.scheduler import CosineWarmupScheduler, get_lr_scheduler, clip_gradients
-from model.transformer import MiniGPT
+from model.transformer import PoetryGPT
 from data.tokenizer import CharTokenizer
 
 
@@ -66,7 +66,7 @@ class TestCheckpointing:
         os.rmdir(self.temp_dir)
     
     def test_save_checkpoint_creates_file(self):
-        model = MiniGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
+        model = PoetryGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
         optimizer = torch.optim.AdamW(model.parameters())
         
         save_checkpoint(model, optimizer, epoch=5, loss=0.5, path=self.checkpoint_path)
@@ -74,7 +74,7 @@ class TestCheckpointing:
         assert os.path.exists(self.checkpoint_path)
     
     def test_save_checkpoint_content(self):
-        model = MiniGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
+        model = PoetryGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
         optimizer = torch.optim.AdamW(model.parameters())
         
         save_checkpoint(model, optimizer, epoch=10, loss=0.25, path=self.checkpoint_path)
@@ -86,7 +86,7 @@ class TestCheckpointing:
         assert 'optimizer_state_dict' in checkpoint
     
     def test_load_checkpoint_nonexistent_file(self):
-        model = MiniGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
+        model = PoetryGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
         optimizer = torch.optim.AdamW(model.parameters())
         
         epoch = load_checkpoint(model, optimizer, path="nonexistent.pt")
@@ -94,12 +94,12 @@ class TestCheckpointing:
         assert epoch == 0
     
     def test_load_checkpoint_existing_file(self):
-        model = MiniGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
+        model = PoetryGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
         optimizer = torch.optim.AdamW(model.parameters())
         
         save_checkpoint(model, optimizer, epoch=7, loss=0.3, path=self.checkpoint_path)
         
-        new_model = MiniGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
+        new_model = PoetryGPT(vocab_size=50, d_model=64, n_heads=4, n_layers=2)
         new_optimizer = torch.optim.AdamW(new_model.parameters())
         
         loaded_epoch = load_checkpoint(new_model, new_optimizer, path=self.checkpoint_path)
@@ -110,7 +110,7 @@ class TestCheckpointing:
 class TestTrainGPT:
     @pytest.fixture
     def sample_model(self):
-        return MiniGPT(vocab_size=20, d_model=32, n_heads=4, n_layers=2, max_len=16)
+        return PoetryGPT(vocab_size=20, d_model=32, n_heads=4, n_layers=2, max_len=16)
     
     @pytest.fixture
     def sample_tokenizer(self):
@@ -189,7 +189,7 @@ class TestTrainGPT:
 
 class TestLearningRateScheduler:
     def test_cosine_warmup_scheduler_warmup_phase(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         
         scheduler = CosineWarmupScheduler(
@@ -211,7 +211,7 @@ class TestLearningRateScheduler:
             assert abs(current_lr - expected_lr) < 1e-6
     
     def test_cosine_warmup_scheduler_cosine_phase(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         
         scheduler = CosineWarmupScheduler(
@@ -230,7 +230,7 @@ class TestLearningRateScheduler:
         assert 1e-4 <= current_lr <= 1e-3
     
     def test_get_lr_scheduler_enabled(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         config = TrainingConfig()
         config.use_lr_scheduler = True
@@ -241,7 +241,7 @@ class TestLearningRateScheduler:
         assert isinstance(scheduler, CosineWarmupScheduler)
     
     def test_get_lr_scheduler_disabled(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         config = TrainingConfig()
         config.use_lr_scheduler = False
@@ -253,7 +253,7 @@ class TestLearningRateScheduler:
 
 class TestGradientClipping:
     def test_clip_gradients_basic(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         
         # Create some fake gradients
         for param in model.parameters():
@@ -277,7 +277,7 @@ class TestGradientClipping:
         assert abs(total_norm - 1.0) < 1e-3
     
     def test_clip_gradients_no_clipping_needed(self):
-        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        model = PoetryGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
         
         # Create small gradients
         for param in model.parameters():

@@ -4,7 +4,7 @@ import sys
 import argparse
 import torch
 
-from model import MiniGPT, save_model_and_tokenizer, load_model_and_tokenizer
+from model import PoetryGPT, save_model_and_tokenizer, load_model_and_tokenizer
 from data import CharTokenizer, load_slovenian_data
 from training import train_gpt, TrainingConfig
 
@@ -32,7 +32,7 @@ def train_model():
     config.device = device
     print(f"Training on: {device}")
 
-    model = MiniGPT(
+    model = PoetryGPT(
         vocab_size=tokenizer.vocab_size,
         d_model=config.d_model,
         n_heads=config.n_heads,
@@ -85,13 +85,15 @@ def generate_text(prompt):
         print("The model was trained on Slovenian text. Please use characters that exist in the training data.")
         return
 
-    # Generate text
+    # Generate text with improved sampling
     with torch.no_grad():
         generated = model.generate(
             context, 
             max_new_tokens=200, 
             temperature=0.8, 
-            top_k=50
+            top_k=50,
+            top_p=0.9,  # Nucleus sampling
+            repetition_penalty=1.1  # Slight repetition penalty
         )
 
     # Decode and display

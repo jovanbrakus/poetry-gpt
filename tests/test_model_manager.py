@@ -5,7 +5,7 @@ import os
 from unittest.mock import patch, MagicMock
 
 from model.model_manager import save_model_and_tokenizer, load_model_and_tokenizer
-from model.transformer import MiniGPT
+from model.transformer import PoetryGPT
 from data.tokenizer import CharTokenizer
 from training.config import TrainingConfig
 
@@ -22,7 +22,7 @@ class TestModelManager:
     
     @pytest.fixture
     def sample_model(self):
-        return MiniGPT(
+        return PoetryGPT(
             vocab_size=26,  # Match tokenizer vocab size
             d_model=64,
             n_heads=4,
@@ -41,7 +41,7 @@ class TestModelManager:
         config.d_model = 64
         config.n_heads = 4
         config.n_layers = 2
-        config.d_ff = 2048  # Match the default MiniGPT d_ff
+        config.d_ff = 2048  # Match the default PoetryGPT d_ff
         config.max_len = 128
         return config
     
@@ -77,7 +77,7 @@ class TestModelManager:
         
         loaded_model, loaded_tokenizer, loaded_config = load_model_and_tokenizer(self.temp_path)
         
-        assert isinstance(loaded_model, MiniGPT)
+        assert isinstance(loaded_model, PoetryGPT)
         assert isinstance(loaded_tokenizer, CharTokenizer)
         assert isinstance(loaded_config, TrainingConfig)
     
@@ -112,7 +112,7 @@ class TestModelManager:
     
     def test_save_load_roundtrip_model_state(self, sample_model, sample_tokenizer, sample_config):
         # Need to ensure the original model has the same architecture as what will be loaded
-        original_model = MiniGPT(
+        original_model = PoetryGPT(
             vocab_size=sample_tokenizer.vocab_size,
             d_model=sample_config.d_model,
             n_heads=sample_config.n_heads,

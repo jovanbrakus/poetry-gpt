@@ -25,7 +25,7 @@ def load_model_and_tokenizer(path="checkpoints/model_complete.pt"):
         raise FileNotFoundError(f"Model file not found: {path}")
     
     # Import here to avoid circular imports
-    from model import MiniGPT
+    from model import PoetryGPT
     
     # Load with weights_only=False for custom objects like tokenizer
     checkpoint = torch.load(path, map_location='cpu', weights_only=False)
@@ -33,7 +33,7 @@ def load_model_and_tokenizer(path="checkpoints/model_complete.pt"):
     tokenizer = checkpoint['tokenizer']
     config = checkpoint['config']
     
-    model = MiniGPT(
+    model = PoetryGPT(
         vocab_size=checkpoint['vocab_size'],
         d_model=config.d_model,
         n_heads=config.n_heads,

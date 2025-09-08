@@ -6,6 +6,7 @@ from .attention import scaled_dot_product_attention
 from .embeddings import PositionalEncoding
 from .utils import create_causal_mask
 from .initialization import initialize_model
+from .sampling import sample_from_logits
 
 
 class MultiHeadAttention(nn.Module):
@@ -79,7 +80,7 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class MiniGPT(nn.Module):
+class PoetryGPT(nn.Module):
     def __init__(self, vocab_size, d_model=512, n_heads=8, n_layers=6,
                  d_ff=2048, max_len=1024, dropout=0.1, init_method='transformer'):
         super().__init__()
@@ -120,32 +121,45 @@ class MiniGPT(nn.Module):
         return out
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, 
+                top_p=None, repetition_penalty=1.0):
         """
-        Generate new tokens autoregressively
-
-        idx: [batch_size, seq_len] - starting context
-        max_new_tokens: number of new tokens to generate
-        temperature: higher = more random, lower = more deterministic
-        top_k: only sample from top k tokens
+        Generate new tokens autoregressively with improved sampling.
+        
+        Args:
+            idx: [batch_size, seq_len] - starting context
+            max_new_tokens: number of new tokens to generate
+            temperature: higher = more random, lower = more deterministic
+            top_k: only sample from top k tokens (None to disable)
+            top_p: nucleus sampling threshold (None to disable)
+            repetition_penalty: penalty for repeated tokens (1.0 = no penalty)
+        
+        Returns:
+            Generated token sequence [batch_size, seq_len + max_new_tokens]
         """
         self.eval()
 
         for _ in range(max_new_tokens):
+            # Truncate to max context length
             idx_cond = idx if idx.size(1) <= self.max_len else idx[:, -self.max_len:]
 
+            # Forward pass
             logits = self(idx_cond)
+            
+            # Get logits for next token prediction
+            next_token_logits = logits[:, -1, :]
 
-            logits = logits[:, -1, :] / temperature
+            # Sample using improved sampling methods
+            idx_next = sample_from_logits(
+                logits=next_token_logits,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                input_ids=idx,
+                repetition_penalty=repetition_penalty
+            )
 
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float('Inf')
-
-            probs = F.softmax(logits, dim=-1)
-
-            idx_next = torch.multinomial(probs, num_samples=1)
-
+            # Append to sequence
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
