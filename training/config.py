@@ -18,7 +18,7 @@ class TrainingConfig:
     # Training hyperparameters
     batch_size: int = 32
     seq_len: int = 256  # Longer sequences possible with subwords
-    epochs: int = 3
+    epochs: int = 15
     learning_rate: float = 3e-4
     
     # Learning rate scheduling
