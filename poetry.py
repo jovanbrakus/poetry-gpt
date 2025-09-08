@@ -39,7 +39,8 @@ def train_model():
         n_layers=config.n_layers,
         d_ff=config.d_ff,
         max_len=config.max_len,
-        dropout=config.dropout
+        dropout=config.dropout,
+        init_method=config.init_method
     )
 
     total_params = sum(p.numel() for p in model.parameters())

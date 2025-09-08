@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from .attention import scaled_dot_product_attention
 from .embeddings import PositionalEncoding
 from .utils import create_causal_mask
+from .initialization import initialize_model
 
 
 class MultiHeadAttention(nn.Module):
@@ -80,7 +81,7 @@ class TransformerBlock(nn.Module):
 
 class MiniGPT(nn.Module):
     def __init__(self, vocab_size, d_model=512, n_heads=8, n_layers=6,
-                 d_ff=2048, max_len=1024, dropout=0.1):
+                 d_ff=2048, max_len=1024, dropout=0.1, init_method='transformer'):
         super().__init__()
 
         self.max_len = max_len
@@ -97,6 +98,9 @@ class MiniGPT(nn.Module):
         self.lm_head = nn.Linear(d_model, vocab_size)
 
         self.dropout = nn.Dropout(dropout)
+        
+        # Apply weight initialization
+        initialize_model(self, method=init_method)
 
     def forward(self, idx, mask=None):
         batch_size, seq_len = idx.shape

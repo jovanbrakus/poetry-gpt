@@ -26,6 +26,9 @@ class TrainingConfig:
     gradient_clip_val: float = 1.0
     weight_decay: float = 0.01
     
+    # Model initialization
+    init_method: str = 'transformer'  # 'xavier', 'kaiming', or 'transformer'
+    
     # Device and checkpointing
     device: str = 'mps'
     checkpoint_path: str = "checkpoints/gpt_checkpoint.pt"
