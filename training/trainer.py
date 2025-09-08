@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from data.loader import create_data_loader
+from data.loader import create_poetry_dataloader
 from .scheduler import get_lr_scheduler, clip_gradients
 
 
@@ -42,8 +42,8 @@ def load_checkpoint(model, optimizer, path="checkpoints/gpt_checkpoint.pt"):
     return 0
 
 
-def train_gpt(model, text_data, tokenizer, config):
-    """Train the GPT model on text data"""
+def train_gpt(model, config):
+    """Train the GPT model using subword tokenization"""
     model = model.to(config.device)
     optimizer = torch.optim.AdamW(
         model.parameters(), 
@@ -51,9 +51,16 @@ def train_gpt(model, text_data, tokenizer, config):
         weight_decay=config.weight_decay
     )
     
+    # Create data loader with subword tokenization
+    dataloader, dataset = create_poetry_dataloader(
+        vocab_size=config.vocab_size,
+        seq_length=config.seq_len,
+        batch_size=config.batch_size,
+        tokenizer_name=config.tokenizer_name
+    )
+    
     # Calculate total training steps for scheduler
-    data_length = len(tokenizer.encode(text_data))
-    steps_per_epoch = max(1, (data_length - config.seq_len) // (config.batch_size * config.seq_len))
+    steps_per_epoch = len(dataloader)
     total_steps = steps_per_epoch * config.epochs
     
     # Initialize learning rate scheduler
@@ -61,9 +68,6 @@ def train_gpt(model, text_data, tokenizer, config):
     
     # Try to load existing checkpoint
     start_epoch = load_checkpoint(model, optimizer, config.checkpoint_path)
-    
-    # Create data loader
-    get_batch = create_data_loader(text_data, tokenizer, config.batch_size, config.seq_len)
     
     model.train()
     
@@ -87,44 +91,41 @@ def train_gpt(model, text_data, tokenizer, config):
         batch_count = 0
         
         # Create progress bar for batches
-        batch_generator = get_batch()
+        progress_bar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{config.epochs}', leave=False)
         
-        try:
-            for batch in batch_generator:
-                batch = batch.to(config.device)
+        for batch in progress_bar:
+            # Extract input_ids and labels from batch
+            input_ids = batch['input_ids'].to(config.device)
+            labels = batch['labels'].to(config.device)
                 
-                # Input is all tokens except last, target is all tokens except first
-                x = batch[:, :-1]  # [batch_size, seq_len]
-                y = batch[:, 1:]   # [batch_size, seq_len]
+            # Forward pass
+            logits = model(input_ids)  # [batch_size, seq_len, vocab_size]
                 
-                # Forward pass
-                logits = model(x)  # [batch_size, seq_len, vocab_size]
+            # Calculate loss
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                labels.reshape(-1)
+            )
                 
-                # Calculate loss
-                loss = F.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)),
-                    y.reshape(-1)
-                )
-                
-                # Backward pass
-                optimizer.zero_grad()
-                loss.backward()
-                
-                # Gradient clipping
-                grad_norm = clip_gradients(model, config.gradient_clip_val)
-                
-                optimizer.step()
-                
-                # Update learning rate scheduler
-                if scheduler:
-                    scheduler.step()
-                    global_step += 1
-                
-                total_loss += loss.item()
-                batch_count += 1
-                
-        except StopIteration:
-            pass
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            
+            # Gradient clipping
+            grad_norm = clip_gradients(model, config.gradient_clip_val)
+            
+            optimizer.step()
+            
+            # Update learning rate scheduler
+            if scheduler:
+                scheduler.step()
+                global_step += 1
+            
+            total_loss += loss.item()
+            batch_count += 1
+            
+            # Update progress bar
+            progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         # Calculate epoch time and loss
         epoch_time = time.time() - epoch_start_time

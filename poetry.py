@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import argparse
 import torch
 
 from model import PoetryGPT, save_model_and_tokenizer, load_model_and_tokenizer
-from data import CharTokenizer, load_slovenian_data
+from data import create_poetry_dataloader
 from training import train_gpt, TrainingConfig
 
 
 def train_model():
-    """Train the model and save it locally"""
-    print("Loading Slovenian poetry data...")
-    text = load_slovenian_data("static/slovenian")
-    print(f"Dataset size: {len(text):,} characters")
-    print(f"First 200 characters:\n{text[:200]}")
-    print("\n" + "="*50 + "\n")
-
-    tokenizer = CharTokenizer(text)
-    print(f"Vocabulary size: {tokenizer.vocab_size}")
-    print(f"Sample vocabulary: {list(tokenizer.char_to_idx.items())[:10]}")
-
+    """Train the model with subword tokenization"""
+    print("PoetryGPT Training with Subword Tokenization")
+    print("=" * 60)
+    
     config = TrainingConfig()
     
     # Use MPS if available, otherwise CPU
@@ -30,94 +24,140 @@ def train_model():
         device = torch.device('cpu')
     
     config.device = device
-    print(f"Training on: {device}")
+    print(f"Training device: {device}")
+    print(f"Model configuration: {config}")
+    print()
 
+    # Create data loader (this also creates and trains the tokenizer)
+    dataloader, dataset = create_poetry_dataloader(
+        vocab_size=config.vocab_size,
+        seq_length=config.seq_len,
+        batch_size=config.batch_size,
+        tokenizer_name=config.tokenizer_name
+    )
+    
+    # Get the actual vocabulary size from the trained tokenizer
+    actual_vocab_size = dataset.get_vocab_size()
+    print(f"\nModel Configuration:")
+    print(f"   Vocabulary size: {actual_vocab_size:,} subwords")
+    print(f"   Sequence length: {config.seq_len}")
+    print(f"   Model dimensions: {config.d_model}")
+    print(f"   Attention heads: {config.n_heads}")
+    print(f"   Layers: {config.n_layers}")
+    print(f"   Feed-forward dim: {config.d_ff}")
+    print(f"   Dropout: {config.dropout}")
+    print(f"   Activation: {config.activation_type}")
+
+    # Create model with actual vocabulary size
     model = PoetryGPT(
-        vocab_size=tokenizer.vocab_size,
+        vocab_size=actual_vocab_size,
         d_model=config.d_model,
         n_heads=config.n_heads,
         n_layers=config.n_layers,
         d_ff=config.d_ff,
         max_len=config.max_len,
         dropout=config.dropout,
-        init_method=config.init_method
+        init_method=config.init_method,
+        activation_type=config.activation_type
     )
 
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"\nModel parameters: {total_params:,}")
-
-    print("\nStarting training...")
-    model = train_gpt(model, text, tokenizer, config)
-
-    # Save the complete model
-    save_model_and_tokenizer(model, tokenizer, config)
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-    print("\nTraining complete! Model saved locally.")
-
-
-def generate_text(prompt):
-    """Load the model and generate text from the given prompt"""
-    try:
-        model, tokenizer, config = load_model_and_tokenizer()
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        print("Please train the model first using: python poetry.py train")
-        return
-
-    # Use MPS if available, otherwise CPU
-    if torch.backends.mps.is_available():
-        device = torch.device('mps')
-    else:
-        device = torch.device('cpu')
+    print(f"\nModel Statistics:")
+    print(f"   Total parameters: {total_params:,}")
+    print(f"   Trainable parameters: {trainable_params:,}")
+    print(f"   Model size: ~{total_params * 4 / 1024 / 1024:.1f} MB")
     
-    model = model.to(device)
-    model.eval()
+    print(f"\nStarting training...")
+    print("=" * 60)
+    
+    model = train_gpt(model, config)
 
-    print(f"Using device: {device}")
-    print(f"Generating text from prompt: '{prompt}'")
-    print("-" * 50)
+    print("\n" + "=" * 60)
+    print("Training completed!")
+    
+    # Save model and tokenizer  
+    os.makedirs("static/models", exist_ok=True)
+    save_model_and_tokenizer(model, dataset.tokenizer, "static/models/poetry_gpt.pt")
+    print("Model and tokenizer saved to static/models/poetry_gpt.pt")
+    
+    return model, dataset.tokenizer
 
-    # Encode the prompt
+
+def generate_text(prompt="", max_tokens=100):
+    """Generate poetry using trained model"""
+    print(f"Generating poetry...")
+    print(f"   Prompt: '{prompt}'")
+    print(f"   Max tokens: {max_tokens}")
+    print()
+    
     try:
-        context = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long).to(device)
-    except KeyError as e:
-        print(f"Error: Character '{e.args[0]}' not found in vocabulary.")
-        print("The model was trained on Slovenian text. Please use characters that exist in the training data.")
+        model, tokenizer = load_model_and_tokenizer("static/models/poetry_gpt.pt")
+        model.eval()
+        
+        # Determine device
+        device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+        model = model.to(device)
+        
+        # Encode prompt
+        if prompt:
+            input_ids = torch.tensor([tokenizer.encode(prompt)], device=device)
+        else:
+            # Start with BOS token
+            input_ids = torch.tensor([[tokenizer.bos_id]], device=device)
+        
+        print("Generated poetry:")
+        print("-" * 40)
+        
+        # Generate text
+        with torch.no_grad():
+            generated = model.generate(
+                input_ids, 
+                max_new_tokens=max_tokens,
+                temperature=0.8,
+                top_k=50,
+                top_p=0.9,
+                repetition_penalty=1.1
+            )
+        
+        # Decode and display
+        generated_text = tokenizer.decode(generated[0].tolist())
+        print(generated_text)
+        print("-" * 40)
+        
+    except FileNotFoundError:
+        print(f"Model not found at static/models/poetry_gpt.pt")
+        print("   Please train the model first using: python poetry.py train")
         return
-
-    # Generate text with improved sampling
-    with torch.no_grad():
-        generated = model.generate(
-            context, 
-            max_new_tokens=200, 
-            temperature=0.8, 
-            top_k=50,
-            top_p=0.9,  # Nucleus sampling
-            repetition_penalty=1.1  # Slight repetition penalty
-        )
-
-    # Decode and display
-    full_text = tokenizer.decode(generated[0].tolist())
-    print(full_text)
+    except Exception as e:
+        print(f"Error during generation: {e}")
+        return
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Slovenian Poetry Generator')
-    parser.add_argument('command', choices=['train', 'generate'], 
-                       help='Command to run: train the model or generate text')
-    parser.add_argument('prompt', nargs='?', default='', 
-                       help='Text prompt for generation (required for generate command)')
-
+    parser = argparse.ArgumentParser(description="PoetryGPT - Slovenian/Serbian Poetry Generator")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Train command
+    train_parser = subparsers.add_parser('train', help='Train the model')
+    
+    # Generate command
+    gen_parser = subparsers.add_parser('generate', help='Generate poetry')
+    gen_parser.add_argument('--prompt', type=str, default="", help='Starting prompt for generation')
+    gen_parser.add_argument('--max-tokens', type=int, default=100, help='Maximum tokens to generate')
+    
     args = parser.parse_args()
-
+    
     if args.command == 'train':
         train_model()
     elif args.command == 'generate':
-        if not args.prompt:
-            print("Error: Please provide a prompt for text generation.")
-            print("Usage: python poetry.py generate \"Your prompt here\"")
-            sys.exit(1)
-        generate_text(args.prompt)
+        generate_text(
+            prompt=args.prompt,
+            max_tokens=args.max_tokens
+        )
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
