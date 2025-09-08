@@ -26,8 +26,9 @@ class TrainingConfig:
     gradient_clip_val: float = 1.0
     weight_decay: float = 0.01
     
-    # Model initialization
+    # Model initialization and architecture
     init_method: str = 'transformer'  # 'xavier', 'kaiming', or 'transformer'
+    activation_type: str = 'swiglu'   # 'swiglu', 'geglu', 'reglu', 'relu'
     
     # Device and checkpointing
     device: str = 'mps'

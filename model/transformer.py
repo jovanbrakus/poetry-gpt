@@ -7,6 +7,8 @@ from .embeddings import PositionalEncoding
 from .utils import create_causal_mask
 from .initialization import initialize_model
 from .sampling import sample_from_logits
+from .normalization import RMSNorm
+from .activations import create_feedforward
 
 
 class MultiHeadAttention(nn.Module):
@@ -52,20 +54,15 @@ class MultiHeadAttention(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff=2048, dropout=0.1):
+    def __init__(self, d_model, num_heads, d_ff=2048, dropout=0.1, activation_type='swiglu'):
         super().__init__()
 
         self.attention = MultiHeadAttention(d_model, num_heads)
 
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
+        self.norm1 = RMSNorm(d_model)
+        self.norm2 = RMSNorm(d_model)
 
-        self.feed_forward = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model)
-        )
+        self.feed_forward = create_feedforward(d_model, d_ff, dropout, activation_type)
 
         self.dropout = nn.Dropout(dropout)
 
@@ -82,7 +79,8 @@ class TransformerBlock(nn.Module):
 
 class PoetryGPT(nn.Module):
     def __init__(self, vocab_size, d_model=512, n_heads=8, n_layers=6,
-                 d_ff=2048, max_len=1024, dropout=0.1, init_method='transformer'):
+                 d_ff=2048, max_len=1024, dropout=0.1, init_method='transformer',
+                 activation_type='swiglu'):
         super().__init__()
 
         self.max_len = max_len
@@ -91,11 +89,11 @@ class PoetryGPT(nn.Module):
         self.position_encoding = PositionalEncoding(d_model, max_len)
 
         self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, n_heads, d_ff, dropout)
+            TransformerBlock(d_model, n_heads, d_ff, dropout, activation_type)
             for _ in range(n_layers)
         ])
 
-        self.ln_f = nn.LayerNorm(d_model)
+        self.ln_f = RMSNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size)
 
         self.dropout = nn.Dropout(dropout)
