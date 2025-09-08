@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from data.loader import create_data_loader
+from .scheduler import get_lr_scheduler, clip_gradients
 
 
 def format_time(seconds):
@@ -44,7 +45,19 @@ def load_checkpoint(model, optimizer, path="checkpoints/gpt_checkpoint.pt"):
 def train_gpt(model, text_data, tokenizer, config):
     """Train the GPT model on text data"""
     model = model.to(config.device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), 
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay
+    )
+    
+    # Calculate total training steps for scheduler
+    data_length = len(tokenizer.encode(text_data))
+    steps_per_epoch = max(1, (data_length - config.seq_len) // (config.batch_size * config.seq_len))
+    total_steps = steps_per_epoch * config.epochs
+    
+    # Initialize learning rate scheduler
+    scheduler = get_lr_scheduler(optimizer, config, total_steps)
     
     # Try to load existing checkpoint
     start_epoch = load_checkpoint(model, optimizer, config.checkpoint_path)
@@ -57,6 +70,15 @@ def train_gpt(model, text_data, tokenizer, config):
     # Start total training timer
     training_start_time = time.time()
     avg_loss = 0.0  # Initialize avg_loss
+    global_step = start_epoch * steps_per_epoch  # Track global step for scheduler
+    
+    print(f"Training setup:")
+    print(f"  - Steps per epoch: {steps_per_epoch}")
+    print(f"  - Total steps: {total_steps}")
+    print(f"  - Learning rate scheduler: {'enabled' if scheduler else 'disabled'}")
+    print(f"  - Gradient clipping: {config.gradient_clip_val}")
+    print(f"  - Weight decay: {config.weight_decay}")
+    print()
     
     for epoch in range(start_epoch, config.epochs):
         # Start epoch timer
@@ -87,7 +109,16 @@ def train_gpt(model, text_data, tokenizer, config):
                 # Backward pass
                 optimizer.zero_grad()
                 loss.backward()
+                
+                # Gradient clipping
+                grad_norm = clip_gradients(model, config.gradient_clip_val)
+                
                 optimizer.step()
+                
+                # Update learning rate scheduler
+                if scheduler:
+                    scheduler.step()
+                    global_step += 1
                 
                 total_loss += loss.item()
                 batch_count += 1
@@ -98,7 +129,12 @@ def train_gpt(model, text_data, tokenizer, config):
         # Calculate epoch time and loss
         epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / max(batch_count, 1)
-        print(f"Epoch {epoch + 1}/{config.epochs} completed in {format_time(epoch_time)}, Average Loss: {avg_loss:.4f}")
+        
+        # Get current learning rate
+        current_lr = optimizer.param_groups[0]['lr'] if optimizer.param_groups else config.learning_rate
+        
+        print(f"Epoch {epoch + 1}/{config.epochs} completed in {format_time(epoch_time)}, "
+              f"Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}")
         
         # Save checkpoint periodically
         if (epoch + 1) % config.save_every_epochs == 0:
@@ -106,7 +142,7 @@ def train_gpt(model, text_data, tokenizer, config):
     
     # Calculate total training time
     total_training_time = time.time() - training_start_time
-    print(f"\n✅ Training completed in {format_time(total_training_time)}")
+    print(f"\nTraining completed in {format_time(total_training_time)}")
     
     # Save final checkpoint
     save_checkpoint(model, optimizer, config.epochs, avg_loss, config.checkpoint_path)

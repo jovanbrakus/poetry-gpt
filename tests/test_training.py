@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 from training.config import TrainingConfig
 from training.trainer import format_time, save_checkpoint, load_checkpoint, train_gpt
+from training.scheduler import CosineWarmupScheduler, get_lr_scheduler, clip_gradients
 from model.transformer import MiniGPT
 from data.tokenizer import CharTokenizer
 
@@ -184,3 +185,114 @@ class TestTrainGPT:
             
             for param in trained_model.parameters():
                 assert param.device == device
+
+
+class TestLearningRateScheduler:
+    def test_cosine_warmup_scheduler_warmup_phase(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        
+        scheduler = CosineWarmupScheduler(
+            optimizer=optimizer,
+            warmup_steps=10,
+            total_steps=100,
+            min_lr_ratio=0.1
+        )
+        
+        # Test warmup phase
+        initial_lrs = scheduler.get_lr()
+        assert initial_lrs[0] == 0.0  # Should start at 0
+        
+        # Step through warmup
+        for step in range(5):
+            scheduler.step()
+            current_lr = scheduler.get_lr()[0]
+            expected_lr = 1e-3 * (step + 1) / 10
+            assert abs(current_lr - expected_lr) < 1e-6
+    
+    def test_cosine_warmup_scheduler_cosine_phase(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        
+        scheduler = CosineWarmupScheduler(
+            optimizer=optimizer,
+            warmup_steps=5,
+            total_steps=20,
+            min_lr_ratio=0.1
+        )
+        
+        # Fast forward past warmup
+        for _ in range(10):  # Warmup + some cosine steps
+            scheduler.step()
+        
+        current_lr = scheduler.get_lr()[0]
+        # Should be somewhere between max and min LR
+        assert 1e-4 <= current_lr <= 1e-3
+    
+    def test_get_lr_scheduler_enabled(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        config = TrainingConfig()
+        config.use_lr_scheduler = True
+        
+        scheduler = get_lr_scheduler(optimizer, config, total_steps=1000)
+        
+        assert scheduler is not None
+        assert isinstance(scheduler, CosineWarmupScheduler)
+    
+    def test_get_lr_scheduler_disabled(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        config = TrainingConfig()
+        config.use_lr_scheduler = False
+        
+        scheduler = get_lr_scheduler(optimizer, config, total_steps=1000)
+        
+        assert scheduler is None
+
+
+class TestGradientClipping:
+    def test_clip_gradients_basic(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        
+        # Create some fake gradients
+        for param in model.parameters():
+            param.grad = torch.randn_like(param) * 10  # Large gradients
+        
+        # Clip gradients
+        grad_norm = clip_gradients(model, max_norm=1.0)
+        
+        # Check that gradients were clipped
+        assert grad_norm > 1.0  # Original norm was large
+        
+        # Compute new gradient norm
+        total_norm = 0
+        for param in model.parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** (1. / 2)
+        
+        # Should be approximately 1.0 after clipping
+        assert abs(total_norm - 1.0) < 1e-3
+    
+    def test_clip_gradients_no_clipping_needed(self):
+        model = MiniGPT(vocab_size=10, d_model=16, n_heads=2, n_layers=1)
+        
+        # Create small gradients
+        for param in model.parameters():
+            param.grad = torch.randn_like(param) * 0.01  # Even smaller gradients
+        
+        # Get original gradient norm
+        original_norm = clip_gradients(model, max_norm=100.0)  # Very high threshold
+        
+        # Reset gradients and clip with lower threshold  
+        for param in model.parameters():
+            param.grad = torch.randn_like(param) * 0.01
+        
+        # Clip with threshold higher than expected norm
+        threshold = max(2.0, original_norm * 1.5)  # Ensure threshold is high enough
+        grad_norm = clip_gradients(model, max_norm=threshold)
+        
+        # Should be less than threshold, no clipping needed
+        assert grad_norm <= threshold

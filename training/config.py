@@ -17,7 +17,16 @@ class TrainingConfig:
     epochs: int = 15
     learning_rate: float = 3e-4
     
+    # Learning rate scheduling
+    use_lr_scheduler: bool = True
+    warmup_steps: int = 1000
+    min_lr_ratio: float = 0.1  # Minimum LR as ratio of max LR
+    
+    # Optimization
+    gradient_clip_val: float = 1.0
+    weight_decay: float = 0.01
+    
     # Device and checkpointing
-    device: str = 'mps'  # 'mps' for Apple Silicon, 'cuda' for NVIDIA, 'cpu' for CPU
+    device: str = 'mps'
     checkpoint_path: str = "checkpoints/gpt_checkpoint.pt"
     save_every_epochs: int = 5
