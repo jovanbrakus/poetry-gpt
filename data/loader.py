@@ -27,7 +27,6 @@ def create_data_loader(dataset: PoetryDataset, batch_size: int = 32,
 
 
 def create_poetry_dataloader(slovenian_path="static/slovenian", 
-                           serbian_path="static/serbian",
                            vocab_size=12000,
                            seq_length=256,
                            batch_size=32,
@@ -39,7 +38,6 @@ def create_poetry_dataloader(slovenian_path="static/slovenian",
     
     Args:
         slovenian_path: Path to Slovenian poetry files
-        serbian_path: Path to Serbian poetry files
         vocab_size: Subword vocabulary size
         seq_length: Maximum sequence length
         batch_size: Training batch size
@@ -53,7 +51,6 @@ def create_poetry_dataloader(slovenian_path="static/slovenian",
     # Create dataset with subword tokenization
     dataset = create_poetry_dataset(
         slovenian_path=slovenian_path,
-        serbian_path=serbian_path,
         vocab_size=vocab_size,
         seq_length=seq_length,
         stride=stride,

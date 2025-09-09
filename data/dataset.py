@@ -65,23 +65,16 @@ def load_serbian_data(data_path="static/serbian"):
     return combined_text
 
 
-def load_combined_data(slovenian_path="static/slovenian", serbian_path="static/serbian"):
-    """Load and combine Slovenian and Serbian poetry data"""
+def load_combined_data(slovenian_path="static/slovenian", serbian_path=None):
+    """Load Slovenian poetry data (Serbian disabled by default)"""
     print("Loading Slovenian poetry data...")
     slovenian_text = load_slovenian_data(slovenian_path)
     
-    print("\nLoading Serbian poetry data...")
-    serbian_text = load_serbian_data(serbian_path)
-    
-    # Combine both datasets
-    combined_text = slovenian_text + "\n\n" + serbian_text
-    
-    print(f"\nCombined poetry corpus:")
+    print(f"\nPoetry corpus:")
     print(f"   Slovenian: {len(slovenian_text):,} characters")
-    print(f"   Serbian: {len(serbian_text):,} characters")
-    print(f"   Total: {len(combined_text):,} characters")
+    print(f"   Total: {len(slovenian_text):,} characters")
     
-    return combined_text
+    return slovenian_text
 
 
 def prepare_tokenizer(text_data: str, vocab_size: int = 12000, 
@@ -218,7 +211,6 @@ class PoetryDataset(Dataset):
 
 
 def create_poetry_dataset(slovenian_path="static/slovenian", 
-                         serbian_path="static/serbian",
                          vocab_size=12000,
                          seq_length=256,
                          stride=None,
@@ -228,7 +220,6 @@ def create_poetry_dataset(slovenian_path="static/slovenian",
     
     Args:
         slovenian_path: Path to Slovenian poetry files
-        serbian_path: Path to Serbian poetry files  
         vocab_size: Subword vocabulary size
         seq_length: Maximum sequence length
         stride: Stride for overlapping sequences
@@ -240,8 +231,8 @@ def create_poetry_dataset(slovenian_path="static/slovenian",
     print("Creating Poetry Dataset with Subword Tokenization")
     print("=" * 60)
     
-    # Load combined text data
-    text_data = load_combined_data(slovenian_path, serbian_path)
+    # Load Slovenian text data only
+    text_data = load_combined_data(slovenian_path)
     
     # Prepare tokenizer
     tokenizer = prepare_tokenizer(text_data, vocab_size, tokenizer_name)

@@ -136,7 +136,7 @@ def generate_text(prompt="", max_tokens=100):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PoetryGPT - Slovenian/Serbian Poetry Generator")
+    parser = argparse.ArgumentParser(description="PoetryGPT - Slovenian Poetry Generator")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Train command

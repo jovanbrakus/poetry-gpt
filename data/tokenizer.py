@@ -7,7 +7,7 @@ import tempfile
 
 class SubwordTokenizer:
     """
-    Subword tokenizer using SentencePiece for Slovenian/Serbian poetry.
+    Subword tokenizer using SentencePiece for Slovenian poetry.
     
     Handles morphologically rich South Slavic languages better than character-level
     tokenization by learning subword units that capture morphological patterns.

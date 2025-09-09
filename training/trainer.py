@@ -2,10 +2,29 @@ import os
 import time
 import torch
 import torch.nn.functional as F
+from torch.utils.data import random_split
 from tqdm import tqdm
 
-from data.loader import create_poetry_dataloader
+from data.loader import create_poetry_dataloader, create_data_loader
 from .scheduler import get_lr_scheduler, clip_gradients
+
+
+class EarlyStopping:
+    """Early stopping to halt training when validation loss stops improving"""
+    def __init__(self, patience=5, min_delta=0.001):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.wait = 0
+        self.best_loss = float('inf')
+        
+    def __call__(self, val_loss):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.wait = 0
+            return False  # Continue training
+        else:
+            self.wait += 1
+            return self.wait >= self.patience  # Stop training if patience exceeded
 
 
 def format_time(seconds):
@@ -13,6 +32,30 @@ def format_time(seconds):
     minutes = int(seconds // 60)
     seconds = int(seconds % 60)
     return f"{minutes}m {seconds}s"
+
+
+def validate_model(model, val_dataloader, device):
+    """Evaluate model on validation set"""
+    model.eval()
+    total_loss = 0
+    batch_count = 0
+    
+    with torch.no_grad():
+        for batch in val_dataloader:
+            input_ids = batch['input_ids'].to(device)
+            labels = batch['labels'].to(device)
+            
+            logits = model(input_ids)
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                labels.reshape(-1)
+            )
+            
+            total_loss += loss.item()
+            batch_count += 1
+    
+    model.train()
+    return total_loss / max(batch_count, 1)
 
 
 def save_checkpoint(model, optimizer, epoch, loss, path="checkpoints/gpt_checkpoint.pt"):
@@ -59,8 +102,25 @@ def train_gpt(model, config):
         tokenizer_name=config.tokenizer_name
     )
     
-    # Calculate total training steps for scheduler
-    steps_per_epoch = len(dataloader)
+    # Split dataset into train and validation
+    dataset_size = len(dataset)
+    val_size = int(config.validation_split * dataset_size)
+    train_size = dataset_size - val_size
+    
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    
+    # Create separate dataloaders
+    train_dataloader = create_data_loader(train_dataset, config.batch_size, shuffle=True)
+    val_dataloader = create_data_loader(val_dataset, config.batch_size, shuffle=False)
+    
+    # Initialize early stopping
+    early_stopping = EarlyStopping(
+        patience=config.early_stopping_patience,
+        min_delta=config.min_delta
+    )
+    
+    # Calculate total training steps for scheduler (using train dataloader)
+    steps_per_epoch = len(train_dataloader)
     total_steps = steps_per_epoch * config.epochs
     
     # Initialize learning rate scheduler
@@ -77,11 +137,15 @@ def train_gpt(model, config):
     global_step = start_epoch * steps_per_epoch  # Track global step for scheduler
     
     print(f"Training setup:")
+    print(f"  - Dataset size: {dataset_size:,} sequences")
+    print(f"  - Train size: {train_size:,} sequences")
+    print(f"  - Validation size: {val_size:,} sequences")
     print(f"  - Steps per epoch: {steps_per_epoch}")
     print(f"  - Total steps: {total_steps}")
     print(f"  - Learning rate scheduler: {'enabled' if scheduler else 'disabled'}")
     print(f"  - Gradient clipping: {config.gradient_clip_val}")
     print(f"  - Weight decay: {config.weight_decay}")
+    print(f"  - Early stopping patience: {config.early_stopping_patience}")
     print()
     
     for epoch in range(start_epoch, config.epochs):
@@ -91,7 +155,7 @@ def train_gpt(model, config):
         batch_count = 0
         
         # Create progress bar for batches
-        progress_bar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{config.epochs}', leave=False)
+        progress_bar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{config.epochs}', leave=False)
         
         for batch in progress_bar:
             # Extract input_ids and labels from batch
@@ -131,15 +195,25 @@ def train_gpt(model, config):
         epoch_time = time.time() - epoch_start_time
         avg_loss = total_loss / max(batch_count, 1)
         
+        # Validate model
+        val_loss = validate_model(model, val_dataloader, config.device)
+        
         # Get current learning rate
         current_lr = optimizer.param_groups[0]['lr'] if optimizer.param_groups else config.learning_rate
         
-        print(f"Epoch {epoch + 1}/{config.epochs} completed in {format_time(epoch_time)}, "
-              f"Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}")
+        print(f"Epoch {epoch + 1}/{config.epochs} completed in {format_time(epoch_time)}")
+        print(f"  Train Loss: {avg_loss:.4f}, Val Loss: {val_loss:.4f}, LR: {current_lr:.2e}")
         
-        # Save checkpoint periodically
-        if (epoch + 1) % config.save_every_epochs == 0:
-            save_checkpoint(model, optimizer, epoch + 1, avg_loss, config.checkpoint_path)
+        # Check early stopping
+        if early_stopping(val_loss):
+            print(f"Early stopping triggered after {epoch + 1} epochs")
+            print(f"Best validation loss: {early_stopping.best_loss:.4f}")
+            break
+        
+        # Save checkpoint periodically or if validation improves
+        save_checkpoint_now = (epoch + 1) % config.save_every_epochs == 0
+        if save_checkpoint_now or val_loss == early_stopping.best_loss:
+            save_checkpoint(model, optimizer, epoch + 1, val_loss, config.checkpoint_path)
     
     # Calculate total training time
     total_training_time = time.time() - training_start_time
