@@ -79,7 +79,7 @@ def load_combined_data(slovenian_path="static/slovenian", serbian_path=None):
 
 def prepare_tokenizer(text_data: str, vocab_size: int = 12000, 
                      model_name: str = "poetry_tokenizer",
-                     save_dir: str = "static/models/tokenizer") -> SubwordTokenizer:
+                     save_dir: str = "static/tokenizer") -> SubwordTokenizer:
     """
     Train or load subword tokenizer for poetry data.
     

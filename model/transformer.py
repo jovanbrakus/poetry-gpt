@@ -97,6 +97,7 @@ class PoetryGPT(nn.Module):
                  activation_type='swiglu', use_rope=False):
         super().__init__()
 
+        self.vocab_size = vocab_size
         self.max_len = max_len
         self.use_rope = use_rope
 
@@ -175,14 +176,16 @@ class PoetryGPT(nn.Module):
             # Get logits for next token prediction
             next_token_logits = logits[:, -1, :]
 
-            # Sample using improved sampling methods
+            # Sample using improved sampling methods (exclude UNK token)
             idx_next = sample_from_logits(
                 logits=next_token_logits,
                 temperature=temperature,
                 top_k=top_k,
                 top_p=top_p,
                 input_ids=idx,
-                repetition_penalty=repetition_penalty
+                repetition_penalty=repetition_penalty,
+                vocab_size=self.vocab_size,
+                exclude_tokens=[1]  # Exclude UNK token (ID=1)
             )
 
             # Append to sequence

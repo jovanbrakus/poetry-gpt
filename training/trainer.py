@@ -210,9 +210,9 @@ def train_gpt(model, config):
             print(f"Best validation loss: {early_stopping.best_loss:.4f}")
             break
         
-        # Save checkpoint periodically or if validation improves
+        # Save checkpoint periodically (every N epochs)
         save_checkpoint_now = (epoch + 1) % config.save_every_epochs == 0
-        if save_checkpoint_now or val_loss == early_stopping.best_loss:
+        if save_checkpoint_now:
             save_checkpoint(model, optimizer, epoch + 1, val_loss, config.checkpoint_path)
     
     # Calculate total training time

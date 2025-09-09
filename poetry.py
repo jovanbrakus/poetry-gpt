@@ -77,10 +77,10 @@ def train_model():
     print("\n" + "=" * 60)
     print("Training completed!")
     
-    # Save model and tokenizer  
+    # Save model and tokenizer separately
     os.makedirs("static/models", exist_ok=True)
-    save_model_and_tokenizer(model, dataset.tokenizer, "static/models/poetry_gpt.pt")
-    print("Model and tokenizer saved to static/models/poetry_gpt.pt")
+    os.makedirs("static/tokenizer", exist_ok=True)
+    save_model_and_tokenizer(model, dataset.tokenizer, "static/models/poetry_gpt.pt", "static/tokenizer/poetry_tokenizer.model")
     
     return model, dataset.tokenizer
 
@@ -93,7 +93,7 @@ def generate_text(prompt="", max_tokens=100):
     print()
     
     try:
-        model, tokenizer = load_model_and_tokenizer("static/models/poetry_gpt.pt")
+        model, tokenizer = load_model_and_tokenizer("static/models/poetry_gpt.pt", "static/tokenizer/poetry_tokenizer.model")
         model.eval()
         
         # Determine device

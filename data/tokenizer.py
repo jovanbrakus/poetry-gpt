@@ -191,8 +191,14 @@ class SubwordTokenizer:
     
     def save(self, path: str):
         """Save tokenizer model to specified path."""
+        import shutil
+        import os
+        
         if self.model_path and os.path.exists(self.model_path):
-            import shutil
+            # Check if source and destination are the same file
+            if os.path.abspath(self.model_path) == os.path.abspath(path):
+                print(f"Tokenizer already at target location: {path}")
+                return
             shutil.copy(self.model_path, path)
             print(f"Tokenizer saved to: {path}")
         else:

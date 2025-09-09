@@ -101,7 +101,8 @@ def apply_repetition_penalty(logits, input_ids, penalty=1.0):
 
 
 def sample_from_logits(logits, temperature=1.0, top_k=None, top_p=None, 
-                      input_ids=None, repetition_penalty=1.0):
+                      input_ids=None, repetition_penalty=1.0, vocab_size=None, 
+                      exclude_tokens=None):
     """
     Sample tokens from logits with various sampling strategies.
     
@@ -112,10 +113,18 @@ def sample_from_logits(logits, temperature=1.0, top_k=None, top_p=None,
         top_p: Top-p/nucleus sampling (None to disable) 
         input_ids: Previous tokens for repetition penalty (None to disable)
         repetition_penalty: Repetition penalty factor (1.0 to disable)
+        vocab_size: Maximum valid token ID (for safety clamping)
+        exclude_tokens: List of token IDs to exclude from sampling (e.g., UNK token)
     
     Returns:
         Sampled token indices of shape [batch_size, 1]
     """
+    # Exclude specific tokens (like UNK) by setting their logits to -inf
+    if exclude_tokens is not None:
+        for token_id in exclude_tokens:
+            if 0 <= token_id < logits.size(-1):
+                logits[:, token_id] = -float('inf')
+    
     # Apply temperature
     if temperature != 1.0:
         logits = logits / temperature
@@ -135,5 +144,9 @@ def sample_from_logits(logits, temperature=1.0, top_k=None, top_p=None,
     # Convert to probabilities and sample
     probs = F.softmax(logits, dim=-1)
     next_tokens = torch.multinomial(probs, num_samples=1)
+    
+    # Safety check: clamp token IDs to valid vocabulary range
+    if vocab_size is not None:
+        next_tokens = torch.clamp(next_tokens, 0, vocab_size - 1)
     
     return next_tokens
